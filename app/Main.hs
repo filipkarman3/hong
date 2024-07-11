@@ -4,28 +4,15 @@
 module Main where
 
 import qualified SDL
-import qualified SDLHelper as H
-import qualified KeyboardReader as KB
+
+import SDLHelper.WorldExposed
+
+import qualified SDLHelper.SDLHelper as H
+import qualified SDLHelper.KeyboardReader as KB
 
 import Data.Word (Word8)
 
 import Control.Monad.IO.Class (MonadIO)
-
-
-data World = World {
-    kb :: KB.Keyboard,
-    w  :: SDL.Window,
-    sc :: SDL.Surface,
-    r  :: SDL.Renderer,
-    fps :: Int
-}
-
-instance H.World World where
-    kb = kb
-    w  = w
-    sc = sc
-    r  = r
-    fps = fps
 
 main :: IO ()
 main = H.withSDL
@@ -53,4 +40,4 @@ main = H.withSDL
 
 loop :: (MonadIO m) => World -> [SDL.EventPayload] -> m World
 loop world es = do
-    
+    pure world

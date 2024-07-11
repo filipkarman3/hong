@@ -1,12 +1,11 @@
-{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 
--- module KeyboardReader (withKeyboard, Keyboard, Keybind (..), isKeyDown, isKeyHeld, isKeyPressed) where
-module KeyboardReader where
+module SDLHelper.KeyboardReader where
+
+import SDLHelper.KeyboardReaderExposed
 
 import qualified SDL
 
-import GHC.Generics (Generic)
 
 import System.Directory (doesFileExist)
 
@@ -18,12 +17,6 @@ import Data.Maybe (fromJust, isNothing)
 
 
 type Keyboard = Map.Map Keybind KeycodeWrapper
-
-data Keybind  = Left
-              | Right
-              | Up
-              | Down
-              deriving (Eq, Ord, Enum, Bounded, Generic)
 
 -- needed for encoding of Keybinds to work
 instance Aeson.ToJSON Keybind where
@@ -88,15 +81,10 @@ listOfKeybinds = [minBound..]
 -- creates a list of all default inputs corresponding to every keybind
 -- throws an error if there aren't as many inputs as binds
 getDefaultInputs :: [SDL.Keycode]
-getDefaultInputs = if length listOfKeybinds /= length defaultInputs then
+getDefaultInputs = if length listOfKeybinds /= length getDefaultInputsExposed then
                        error "Not as many default inputs as keybinds!"
-                   else defaultInputs where
-    defaultInputs = [
-        SDL.KeycodeLeft,
-        SDL.KeycodeRight,
-        SDL.KeycodeUp,
-        SDL.KeycodeDown
-     ]
+                   else getDefaultInputsExposed
+
 
 
 -- loads the default keyboard layout
