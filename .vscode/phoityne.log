@@ -1,0 +1,3 @@
+2024-07-10 07:35:32 [ThreadId 7] ERROR phoityne - ghci launch error. <file descriptor: 25>: hPutChar: resource vanished (Broken pipe)
+
+2024-07-10 07:35:32 [ThreadId 7] ERROR phoityne - [disconnectRequestHandler] ghci not started.
