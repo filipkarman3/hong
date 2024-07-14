@@ -1,9 +1,12 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module SDLHelper.SDLHelper where
 
 import qualified SDL
 import qualified SDL.Image
 
 import SDLHelper.WorldExposed
+import SDLHelper.Data
 
 import qualified SDLHelper.KeyboardReader as KB
 
@@ -11,6 +14,30 @@ import Control.Monad          (void, when)
 import Control.Monad.Extra    (loopM)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.Text              (Text)
+
+doMain :: Text
+       -> (Int, Int)
+       -> FilePath
+       -> (KB.Keyboard -> SDL.Window -> SDL.Renderer -> IO World)
+       -> (World -> [SDL.EventPayload] -> IO World)
+       -> (World -> IO ())
+       -> IO ()
+doMain winName (winX, winY) kbPath fInit fLoop fTerminate = withSDL
+    $ withWindow winName (winX, winY)
+    $ \w -> withRenderer w
+    $ \r -> KB.withKeyboard kbPath
+    $ \kb -> do
+        world <- fInit kb w r
+        world' <- loop fLoop world
+        fTerminate world'
+
+        -- gotta return the keyboard layout
+        pure $ getUpdatedKb world'
+    
+    where
+
+        getUpdatedKb :: World -> KB.Keyboard
+        getUpdatedKb world = kb world
 
 withSDL :: (MonadIO m) => m a -> m ()
 withSDL op = do
@@ -113,3 +140,20 @@ loadTexture r p = do
   t <- SDL.Image.loadTexture r p
   i <- SDL.queryTexture t
   pure (t, i)
+
+
+-- centers a rect on another rect
+centerRect :: Rect -> Rect -> Rect
+centerRect a b = a { rectX = newX, rectY = newY } where
+    centerX = (toRational . rectX) b + (toRational . rectW) b /2
+    centerY = (toRational . rectY) b + (toRational . rectH) b /2
+    newX    = toInt $ centerX - (toRational . rectW) a /2
+    newY    = toInt $ centerY - (toRational . rectH) a /2
+
+    toInt :: (RealFrac a) => a -> Int
+    toInt = round
+
+toSDLRect :: a -> a -> a -> a -> SDL.Rectangle a
+toSDLRect a b c d = SDL.Rectangle e f where
+    e = SDL.P $ SDL.V2 a b
+    f = SDL.V2 c d

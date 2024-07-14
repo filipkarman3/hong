@@ -25,6 +25,8 @@ source-repository head
 
 library
   exposed-modules:
+      Player
+      SDLHelper.Data
       SDLHelper.KeyboardReader
       SDLHelper.KeyboardReaderExposed
       SDLHelper.SDLHelper
