@@ -8,7 +8,7 @@ import qualified SDL
 
 import qualified SDLHelper.SDLHelper as H
 
-import           SDLHelper.Data.Rect
+import qualified SDLHelper.Data.Rect                  as R
 import qualified SDLHelper.Data.Keyboard              as KB (Keyboard)
 import qualified SDLHelper.Data.KeyboardReaderExposed as KB (Keybind(..))
 import qualified SDLHelper.Data.WorldExposed          as W
@@ -36,9 +36,9 @@ init raw = do
     let player = P.Player {
         P.speed = 3,
         P.rect  = let
-            screenRect = Rect 0 0 screenWidth screenHeight
-            playerRect = Rect 0 0 (fromIntegral $ SDL.textureWidth $ snd playerImg) (fromIntegral $ SDL.textureHeight $ snd playerImg)
-            in H.centerRect playerRect screenRect,
+            screenRect = R.Rect 0 0 screenWidth screenHeight
+            playerRect = R.Rect 0 0 (fromIntegral $ SDL.textureWidth $ snd playerImg) (fromIntegral $ SDL.textureHeight $ snd playerImg)
+            in R.centerRectVertical playerRect screenRect,
         P.sprite = playerImg
     }
 
@@ -64,7 +64,7 @@ registerQuit w = ifM (KB.isKeyDown w KB.Quit) (W.setQuit w True) w
 
 renderSimple :: W.World -> (SDL.Texture, SDL.TextureInfo) -> (SDL.V2 Int) -> IO ()
 renderSimple w (t, i) (SDL.V2 x y) = SDL.copy (W.getR w) t Nothing (Just rect) where
-    rect   = H.toSDLRect (toCInt x) (toCInt y) width height
+    rect   = R.toSDLRect (toCInt x) (toCInt y) width height
     width  = SDL.textureWidth i
     height = SDL.textureHeight i
 
@@ -96,13 +96,13 @@ constrainPlayer w =
     -- yaay I love unpacking values
     p = W.player w
     r = P.rect p
-    x = rectX r
-    y = rectY r
+    x = R.rectX r
+    y = R.rectY r
     
     -- keep the player on screen
     r' = r {
-        rectX = constrain 0 (screenWidth - rectW r) (rectX r),
-        rectY = constrain 0 (screenHeight - rectH r) (rectY r)
+        R.rectX = constrain 0 (screenWidth - R.rectW r) (R.rectX r),
+        R.rectY = constrain 0 (screenHeight - R.rectH r) (R.rectY r)
     }
     p' = p { P.rect = r'}
 
