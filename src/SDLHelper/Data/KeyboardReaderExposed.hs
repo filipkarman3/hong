@@ -1,6 +1,6 @@
 {-# LANGUAGE DeriveGeneric #-}
 
-module SDLHelper.KeyboardReaderExposed where
+module SDLHelper.Data.KeyboardReaderExposed where
 
 import SDL
 
@@ -13,11 +13,11 @@ data Keybind  = Left
               | Quit
               deriving (Eq, Ord, Enum, Bounded, Generic)
 
-getDefaultInputsExposed :: [SDL.Keycode]
+getDefaultInputsExposed :: [SDL.Scancode]
 getDefaultInputsExposed = [
-        SDL.KeycodeLeft,
-        SDL.KeycodeRight,
-        SDL.KeycodeUp,
-        SDL.KeycodeDown,
-        SDL.KeycodeEscape
+        SDL.ScancodeLeft,
+        SDL.ScancodeRight,
+        SDL.ScancodeUp,
+        SDL.ScancodeDown,
+        SDL.ScancodeEscape
      ]

@@ -1,11 +1,12 @@
-{-# LANGUAGE TypeSynonymInstances #-}
-
 module SDLHelper.KeyboardReader where
-
-import SDLHelper.KeyboardReaderExposed (getDefaultInputsExposed, Keybind(..))
 
 import qualified SDL
 
+import qualified SDLHelper.Data.KeyboardReaderExposed as KR (getDefaultInputsExposed, Keybind(..))
+import qualified SDLHelper.Data.WorldExposed          as W  (World(kb, kbs, kbps))
+import           SDLHelper.Data.Keyboard                    (Keyboard)
+
+import Control.Monad.IO.Class (MonadIO)
 
 import System.Directory (doesFileExist)
 
@@ -14,30 +15,6 @@ import qualified Data.Map.Strict      as Map
 import qualified Data.Aeson           as Aeson
 
 import Data.Maybe (fromJust, isNothing)
-
-
-type Keyboard = Map.Map Keybind KeycodeWrapper
-
--- needed for encoding of Keybinds to work
-instance Aeson.ToJSON Keybind where
-    toEncoding = Aeson.genericToEncoding Aeson.defaultOptions
-
-instance Aeson.FromJSON Keybind
-
--- these two are needed because map keys are encoded differently I think?
-instance Aeson.ToJSONKey Keybind
-
-instance Aeson.FromJSONKey Keybind
-
-
--- this type synonym has been defined because I don't want to directly interact with and make extensions to the SDL.Keycode class
-type KeycodeWrapper = SDL.Keycode
-
--- needed for encoding and decoding of SDL keypresses to work
-instance Aeson.ToJSON KeycodeWrapper where
-    toEncoding = Aeson.genericToEncoding Aeson.defaultOptions
-
-instance Aeson.FromJSON KeycodeWrapper
 
 
 -- loads a keyboard layout given a path to a file storing the keyboard layout
@@ -74,17 +51,16 @@ withKeyboard path op = do
 
 
 --- creates a list of all the keybinds
-listOfKeybinds :: [Keybind]
+listOfKeybinds :: [KR.Keybind]
 listOfKeybinds = [minBound..]
 
 
 -- creates a list of all default inputs corresponding to every keybind
 -- throws an error if there aren't as many inputs as binds
-getDefaultInputs :: [SDL.Keycode]
-getDefaultInputs = if length listOfKeybinds /= length getDefaultInputsExposed then
+getDefaultInputs :: [SDL.Scancode]
+getDefaultInputs = if length listOfKeybinds /= length KR.getDefaultInputsExposed then
                        error "Not as many default inputs as keybinds!"
-                   else getDefaultInputsExposed
-
+                   else KR.getDefaultInputsExposed
 
 
 -- loads the default keyboard layout
@@ -114,63 +90,27 @@ initialiseKeypressArray
 -}
 
 -- checks if a key has been pressed
-genericKeypressChecker :: Keyboard
-                       -> Keybind
-                       -> [SDL.EventPayload]
-                       -> (SDL.Keycode -> SDL.EventPayload -> Bool)
-                       -> Bool
+genericKeypressChecker :: (MonadIO m)
+                       => W.World
+                       -> KR.Keybind
+                       -> (Bool -> Bool -> Bool)
+                       -> m Bool
 -- fold over all provided events and see if one of them is the key that has been pressed
-genericKeypressChecker kb keybind es f = case keyraw of
-    Just key -> foldr (\x l -> f key x || l) False es
-    Nothing  -> False
-    where
-
+genericKeypressChecker w keybind f = pure $ f isKeyPressed wasKeyPressed where
         -- get a raw keybind (space, left, A, etc) corresponding to a keybind (jump, run, etc)
-        -- returns nothing if the key was not found to have a corresponding keybind
-        -- in this case, the key is ignored
-        keyraw   = keybind `Map.lookup` kb
+        keyraw   = fromJust $ keybind `Map.lookup` (W.kb w)
+    
+        isKeyPressed  = (W.kbs w)  keyraw
+        wasKeyPressed = (W.kbps w) keyraw
 
-evaluateKeypress :: SDL.Keycode -> SDL.InputMotion -> Maybe Bool -> SDL.EventPayload -> Bool
-evaluateKeypress targetKeycode targetMotion targetRepeat event =
-    if isNothing keyData'
-        then False
-    else
-        matchingKeycode && matchingMotion && matchingRepeat
-    where
-        compare :: (Eq a) => Maybe a -> a -> Bool
-        compare x y     = case x of
-            Nothing -> True
-            Just x' -> x' == y
+isKeyPressed :: (MonadIO m) => W.World -> KR.Keybind -> m Bool
+isKeyPressed w keybind = genericKeypressChecker w keybind f where
+    f x y = x && not y
 
-        matchingKeycode = targetKeycode == keyKeycode
-        keyKeycode      = SDL.keysymKeycode keyKeysym
-        keyKeysym       = SDL.keyboardEventKeysym keyData
+isKeyHeld :: (MonadIO m) => W.World -> KR.Keybind -> m Bool
+isKeyHeld w keybind = genericKeypressChecker w keybind f where
+    f x y = x && y
 
-        matchingMotion  = targetMotion == keyMotion
-        keyMotion       = SDL.keyboardEventKeyMotion keyData
-
-        matchingRepeat  = compare targetRepeat keyRepeat
-        keyRepeat       = SDL.keyboardEventRepeat keyData
-
-        keyData :: SDL.KeyboardEventData
-        keyData = fromJust $ keyData'
-
-        keyData' :: Maybe SDL.KeyboardEventData
-        keyData' = convertToData event
-
-        convertToData :: SDL.EventPayload -> Maybe SDL.KeyboardEventData
-        convertToData (SDL.KeyboardEvent k) = Just k
-        convertToData _                     = Nothing
-
-
-isKeyPressed :: Keyboard -> Keybind -> [SDL.EventPayload] -> Bool
-isKeyPressed kb keybind es = genericKeypressChecker kb keybind es f where
-    f x y = evaluateKeypress x SDL.Pressed (Just False) y
-
-isKeyHeld :: Keyboard -> Keybind -> [SDL.EventPayload] -> Bool
-isKeyHeld kb keybind es = genericKeypressChecker kb keybind es f where
-    f x y = evaluateKeypress x SDL.Pressed (Just True) y
-
-isKeyDown :: Keyboard -> Keybind -> [SDL.EventPayload] -> Bool
-isKeyDown kb keybind es = genericKeypressChecker kb keybind es f where
-    f x y = evaluateKeypress x SDL.Pressed Nothing y
+isKeyDown :: (MonadIO m) => W.World -> KR.Keybind -> m Bool
+isKeyDown w keybind = genericKeypressChecker w keybind f where
+    f x y = x

@@ -6,12 +6,15 @@ import qualified Player as P
 
 import qualified SDL
 
-import SDLHelper.WorldExposed as W
-
 import qualified SDLHelper.SDLHelper as H
-import SDLHelper.Data
+
+import           SDLHelper.Data.Rect
+import qualified SDLHelper.Data.Keyboard              as KB (Keyboard)
+import qualified SDLHelper.Data.KeyboardReaderExposed as KB (Keybind(..))
+import qualified SDLHelper.Data.WorldExposed          as W
+
 import qualified SDLHelper.KeyboardReader as KB
-import qualified SDLHelper.KeyboardReaderExposed as KB (Keybind(..))
+import SDLHelper.Monads
 
 import Control.Monad.IO.Class (MonadIO, liftIO)
 
@@ -26,7 +29,7 @@ data Direction = Left | Right | Up | Down deriving Show
 main :: IO ()
 main = H.doMain "hsgaem" (screenWidth, screenHeight) "assets/data/layout.kb" Main.init loop terminate
 
-init :: KB.Keyboard -> SDL.Window -> SDL.Renderer -> IO World
+init :: KB.Keyboard -> SDL.Window -> SDL.Renderer -> IO W.World
 init kb w r = do
     playerImg <- H.loadTexture r "assets/player.png"
 
@@ -39,21 +42,25 @@ init kb w r = do
         P.sprite = playerImg
     }
 
-    let world = World {
-        kb = kb,
-        w  = w,
-        r  = r,
-        es = [],
-        fps = 50,
-        player = player,
-        quit = False
+    kbs <- SDL.getKeyboardState
+
+    let world = W.World {
+        W.kb = kb,
+        W.kbs = kbs,
+        W.kbps = kbs,
+        W.w  = w,
+        W.r  = r,
+        W.es = [],
+        W.fps = 50,
+        W.player = player,
+        W.quit = False
     }
 
     pure world
 
-loop :: (MonadIO m) => World -> m World
+loop :: W.World -> IO W.World
 loop w = do
-    let w' = registerQuit w & controlPlayer
+    w' <- registerQuit w >>= movePlayer
 
     let p' = W.player w'
     renderSimple w (P.sprite p') (P.playerPos p')
@@ -61,13 +68,11 @@ loop w = do
     pure w'
 
 -- checks if the player is trying to exit the game, and flips the quit flag if so
-registerQuit :: W.World -> W.World
-registerQuit w = if KB.isKeyDown (W.kb w) KB.Quit (W.es w) then
-        w { W.quit = True }
-    else w
+registerQuit :: W.World -> IO W.World
+registerQuit w = ifM (KB.isKeyDown w KB.Quit) (w { W.quit = True }) w
 
-renderSimple :: (MonadIO m) => World -> (SDL.Texture, SDL.TextureInfo) -> (SDL.V2 Int) -> m ()
-renderSimple w (t, i) (SDL.V2 x y) = SDL.copy (r w) t Nothing (Just rect) where
+renderSimple :: W.World -> (SDL.Texture, SDL.TextureInfo) -> (SDL.V2 Int) -> IO ()
+renderSimple w (t, i) (SDL.V2 x y) = SDL.copy (W.r w) t Nothing (Just rect) where
     rect = H.toSDLRect (toCInt x) (toCInt y) width height
     width  = SDL.textureWidth i
     height = SDL.textureHeight i
@@ -76,47 +81,26 @@ renderSimple w (t, i) (SDL.V2 x y) = SDL.copy (r w) t Nothing (Just rect) where
     toCInt = fromIntegral
 
 -- handles player movement
-movePlayer :: W.World -> W.World
-movePlayer w =
-    constrainPlayer $ controlPlayer w -- first, you can move the player however you like using the input controller (keyboard, controller, whatever)
-     -- but we can't have the player going off the screen! Then it's time to constrain the player's movement to acceptable bounds
+movePlayer :: W.World -> IO W.World
+movePlayer w = do
+    w' <- controlPlayer w     -- first, you can move the player however you like using the input controller (keyboard, controller, whatever)
+    pure $ constrainPlayer w' -- but we can't have the player going off the screen! Then it's time to constrain the player's movement to acceptable bounds
 
 -- handles player movement using the input controller
-controlPlayer :: W.World -> W.World
-controlPlayer w =
-    -- update the world record with the player after they've moved
-    w { player = p' } where
-
-    -- to move the player, I fold over a list of: (
-    --     the keybind corresponding to the direction you're heading in,
-    --     the function that will be used to change the position of the player,
-    --     the sign of the direction to move in
-    -- )
-
-    -- IE: (Left, P.changePlayerX, (-)) means:
-    --     if the player hits the left button, the player will move along the X axis in the negative direction
-
-    -- when folding over each element, the function f is called, more on that below
-    p' = foldr f (W.player w) [
-            (KB.Left,  P.changePlayerX, (-)),
-            (KB.Right, P.changePlayerX, (+)),
-            (KB.Up,    P.changePlayerY, (-)),
-            (KB.Down,  P.changePlayerY, (+))
-        ]
-
-    -- for each element:
-    -- 1) check if the corresponding key is pressed down
-    -- 2) if so, update the player's position and return the updated player
-    --    otherwise, return the unchanged player
-    f (d, m, s) p = if KB.isKeyDown (W.kb w) d (W.es w) then
-            m p (s 0 (P.speed p))
-        else p
+controlPlayer :: W.World -> IO W.World
+controlPlayer w = do
+    w'  <- registerPress w  KB.Up (-n)
+    w'' <- registerPress w' KB.Down n
+    pure w'' where
+       n = P.speed $ W.player w
+       registerPress w k n = ifM (KB.isKeyDown w k) (W.changePlayerY w n) w 
+ 
 
 -- prevents the player from going offscreen
 constrainPlayer :: W.World -> W.World
 constrainPlayer w =
     -- return a world record with the updated player
-    w { player = p' } where
+    w { W.player = p' } where
     
     -- yaay I love unpacking values
     p = W.player w
@@ -137,6 +121,6 @@ constrain min max x = if x < min then min
     else if x > max then max
     else x
 
-terminate :: (MonadIO m) => World -> m ()
+terminate :: (MonadIO m) => W.World -> m ()
 terminate w = do
-    SDL.destroyTexture (fst $ P.sprite $ player w)
+    SDL.destroyTexture (fst $ P.sprite $ W.player w)

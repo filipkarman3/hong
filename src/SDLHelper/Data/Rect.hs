@@ -1,3 +1,3 @@
-module SDLHelper.Data where
+module SDLHelper.Data.Rect where
 
 data Rect = Rect {rectX :: Int, rectY :: Int, rectW :: Int, rectH :: Int}

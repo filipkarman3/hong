@@ -1,6 +1,6 @@
 module Player where
 
-import SDLHelper.Data
+import SDLHelper.Data.Rect
 
 import qualified SDL
 

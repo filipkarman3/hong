@@ -5,10 +5,11 @@ module SDLHelper.SDLHelper where
 import qualified SDL
 import qualified SDL.Image
 
-import SDLHelper.WorldExposed (World(..))
-import SDLHelper.Data
+import SDLHelper.Data.WorldExposed (World(..))
+import SDLHelper.Data.Rect
 
 import qualified SDLHelper.KeyboardReader as KB
+import qualified SDLHelper.Data.Keyboard  as KB (Keyboard)
 
 import Control.Monad          (void, when)
 import Control.Monad.Extra    (loopM)
@@ -84,13 +85,15 @@ withEventHandling :: (MonadIO m)
 withEventHandling op st = do
     -- get list of SDL events like keypresses
     events <- pollEvents
+    state  <- SDL.getKeyboardState
+    
 
     -- quit the game if a quit event occurred
     if quitEventOccurred events || quit st then pure $ Right st
 
     --otherwise, run the game loop
     else do
-        st' <- withTiming (withRendering op) (st { es = events} )
+        st' <- withTiming (withRendering op) (st { es = events, kbps = (kbs st), kbs = state } )
         pure $ Left st' -- return the game state
 
 withTiming :: (MonadIO m) => (World -> m World) -> World -> m World

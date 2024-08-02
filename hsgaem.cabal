@@ -26,11 +26,13 @@ source-repository head
 library
   exposed-modules:
       Player
-      SDLHelper.Data
+      SDLHelper.Data.Keyboard
+      SDLHelper.Data.KeyboardReaderExposed
+      SDLHelper.Data.Rect
+      SDLHelper.Data.WorldExposed
       SDLHelper.KeyboardReader
-      SDLHelper.KeyboardReaderExposed
+      SDLHelper.Monads
       SDLHelper.SDLHelper
-      SDLHelper.WorldExposed
   other-modules:
       Paths_hsgaem
   autogen-modules:
