@@ -5,7 +5,7 @@ module SDLHelper.SDLHelper where
 import qualified SDL
 import qualified SDL.Image
 
-import SDLHelper.Data.WorldExposed (World(..))
+import SDLHelper.Data.WorldExposed (World(wr), WorldRaw(..), getKb)
 import SDLHelper.Data.Rect
 
 import qualified SDLHelper.KeyboardReader as KB
@@ -19,7 +19,7 @@ import Data.Text              (Text)
 doMain :: Text
        -> (Int, Int)
        -> FilePath
-       -> (KB.Keyboard -> SDL.Window -> SDL.Renderer -> IO World)
+       -> (WorldRaw -> IO World)
        -> (World -> IO World)
        -> (World -> IO ())
        -> IO ()
@@ -28,7 +28,21 @@ doMain winName (winX, winY) kbPath fInit fLoop fTerminate = withSDL
     $ \w -> withRenderer w
     $ \r -> KB.withKeyboard kbPath
     $ \kb -> do
-        world <- fInit kb w r
+        kbState <- SDL.getKeyboardState
+
+        -- define a lot of base datatypes here to prevent the library user having to it themselves
+        let raw = WorldRaw {
+            kb   = kb,
+            kbs  = kbState,
+            kbps = kbState,
+            w    = w,
+            es   = [],
+            r    = r,
+            fps  = 50,
+            quit = False
+        }
+
+        world <- fInit raw
         world' <- loop fLoop world
         fTerminate world'
 
@@ -38,7 +52,7 @@ doMain winName (winX, winY) kbPath fInit fLoop fTerminate = withSDL
     where
 
         getUpdatedKb :: World -> KB.Keyboard
-        getUpdatedKb world = kb world
+        getUpdatedKb world = getKb world
 
 withSDL :: (MonadIO m) => m a -> m ()
 withSDL op = do
@@ -87,14 +101,21 @@ withEventHandling op st = do
     events <- pollEvents
     state  <- SDL.getKeyboardState
     
+    let raw = wr st
 
     -- quit the game if a quit event occurred
-    if quitEventOccurred events || quit st then pure $ Right st
+    if quitEventOccurred events || quit raw then pure $ Right st
 
     --otherwise, run the game loop
     else do
-        st' <- withTiming (withRendering op) (st { es = events, kbps = (kbs st), kbs = state } )
-        pure $ Left st' -- return the game state
+        -- update the necessary values, like keypresses done this turn
+        let raw' = raw { es = events, kbps = (kbs raw), kbs = state }
+
+        -- then actuall run the frame
+        st' <- withTiming (withRendering op) (st { wr = raw' })
+        
+        -- return the game state
+        pure $ Left st'
 
 withTiming :: (MonadIO m) => (World -> m World) -> World -> m World
 withTiming op st = do
@@ -113,19 +134,19 @@ withTiming op st = do
     pure st'
     where
         frameTime :: Int
-        frameTime = 1000 `div` fps st
+        frameTime = 1000 `div` (fps $ wr st)
         wait ms = when (20 > ms && ms > 0) $ SDL.delay ms
 
 withRendering :: (MonadIO m) => (World -> m World) -> World -> m World
 withRendering op st = do
     -- clear the screen
-    SDL.clear $ r st
+    SDL.clear $ (r $ wr st)
 
     -- actually run the game tick
     st' <- op st
 
     -- render changes to the screen
-    SDL.present $ r st'
+    SDL.present $ (r $ wr st')
 
     pure st'
 

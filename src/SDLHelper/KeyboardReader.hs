@@ -3,7 +3,7 @@ module SDLHelper.KeyboardReader where
 import qualified SDL
 
 import qualified SDLHelper.Data.KeyboardReaderExposed as KR (getDefaultInputsExposed, Keybind(..))
-import qualified SDLHelper.Data.WorldExposed          as W  (World(kb, kbs, kbps))
+import qualified SDLHelper.Data.WorldExposed          as W  (World, getKb, getKbs, getKbps)
 import           SDLHelper.Data.Keyboard                    (Keyboard)
 
 import Control.Monad.IO.Class (MonadIO)
@@ -98,10 +98,10 @@ genericKeypressChecker :: (MonadIO m)
 -- fold over all provided events and see if one of them is the key that has been pressed
 genericKeypressChecker w keybind f = pure $ f isKeyPressed wasKeyPressed where
         -- get a raw keybind (space, left, A, etc) corresponding to a keybind (jump, run, etc)
-        keyraw   = fromJust $ keybind `Map.lookup` (W.kb w)
+        keyraw   = fromJust $ keybind `Map.lookup` (W.getKb w)
     
-        isKeyPressed  = (W.kbs w)  keyraw
-        wasKeyPressed = (W.kbps w) keyraw
+        isKeyPressed  = (W.getKbs w)  keyraw
+        wasKeyPressed = (W.getKbps w) keyraw
 
 isKeyPressed :: (MonadIO m) => W.World -> KR.Keybind -> m Bool
 isKeyPressed w keybind = genericKeypressChecker w keybind f where

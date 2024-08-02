@@ -29,31 +29,22 @@ data Direction = Left | Right | Up | Down deriving Show
 main :: IO ()
 main = H.doMain "hsgaem" (screenWidth, screenHeight) "assets/data/layout.kb" Main.init loop terminate
 
-init :: KB.Keyboard -> SDL.Window -> SDL.Renderer -> IO W.World
-init kb w r = do
-    playerImg <- H.loadTexture r "assets/player.png"
+init :: W.WorldRaw -> IO W.World
+init raw = do
+    playerImg <- H.loadTexture (W.r raw) "assets/player.png"
 
     let player = P.Player {
         P.speed = 3,
         P.rect  = let
             screenRect = Rect 0 0 screenWidth screenHeight
-            playerRect = Rect 0 0 (fromIntegral $ SDL.textureWidth $ snd playerImg) (fromIntegral $ SDL.textureWidth $ snd playerImg)
+            playerRect = Rect 0 0 (fromIntegral $ SDL.textureWidth $ snd playerImg) (fromIntegral $ SDL.textureHeight $ snd playerImg)
             in H.centerRect playerRect screenRect,
         P.sprite = playerImg
     }
 
-    kbs <- SDL.getKeyboardState
-
     let world = W.World {
-        W.kb = kb,
-        W.kbs = kbs,
-        W.kbps = kbs,
-        W.w  = w,
-        W.r  = r,
-        W.es = [],
-        W.fps = 50,
-        W.player = player,
-        W.quit = False
+        W.wr     = raw,
+        W.player = player
     }
 
     pure world
@@ -69,11 +60,11 @@ loop w = do
 
 -- checks if the player is trying to exit the game, and flips the quit flag if so
 registerQuit :: W.World -> IO W.World
-registerQuit w = ifM (KB.isKeyDown w KB.Quit) (w { W.quit = True }) w
+registerQuit w = ifM (KB.isKeyDown w KB.Quit) (W.setQuit w True) w
 
 renderSimple :: W.World -> (SDL.Texture, SDL.TextureInfo) -> (SDL.V2 Int) -> IO ()
-renderSimple w (t, i) (SDL.V2 x y) = SDL.copy (W.r w) t Nothing (Just rect) where
-    rect = H.toSDLRect (toCInt x) (toCInt y) width height
+renderSimple w (t, i) (SDL.V2 x y) = SDL.copy (W.getR w) t Nothing (Just rect) where
+    rect   = H.toSDLRect (toCInt x) (toCInt y) width height
     width  = SDL.textureWidth i
     height = SDL.textureHeight i
 
