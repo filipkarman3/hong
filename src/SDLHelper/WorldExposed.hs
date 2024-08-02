@@ -9,9 +9,9 @@ import Player (Player)
 data World = World {
     kb :: KB.Keyboard,
     w  :: SDL.Window,
-    -- sc :: SDL.Surface,
+    es :: [SDL.EventPayload],
     r  :: SDL.Renderer,
     fps :: Int,
-
+    quit :: Bool,
     player :: Player
 }

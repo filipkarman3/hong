@@ -5,7 +5,7 @@ module SDLHelper.SDLHelper where
 import qualified SDL
 import qualified SDL.Image
 
-import SDLHelper.WorldExposed
+import SDLHelper.WorldExposed (World(..))
 import SDLHelper.Data
 
 import qualified SDLHelper.KeyboardReader as KB
@@ -19,7 +19,7 @@ doMain :: Text
        -> (Int, Int)
        -> FilePath
        -> (KB.Keyboard -> SDL.Window -> SDL.Renderer -> IO World)
-       -> (World -> [SDL.EventPayload] -> IO World)
+       -> (World -> IO World)
        -> (World -> IO ())
        -> IO ()
 doMain winName (winX, winY) kbPath fInit fLoop fTerminate = withSDL
@@ -72,13 +72,13 @@ rendererConfig = SDL.RendererConfig {
 
 -- iteratively poll for SDL events, perform some operation, quit upon a QuitEvent
 loop :: (MonadIO m)
-     => (World -> [SDL.EventPayload] -> m World)
+     => (World -> m World)
      -> World
      -> m World
 loop op st = loopM (withEventHandling op) st
 
 withEventHandling :: (MonadIO m)
-                  => (World -> [SDL.EventPayload] -> m World)
+                  => (World -> m World)
                   -> World
                   -> m (Either World World)
 withEventHandling op st = do
@@ -86,20 +86,20 @@ withEventHandling op st = do
     events <- pollEvents
 
     -- quit the game if a quit event occurred
-    if quitEventOccurred events then pure $ Right st
+    if quitEventOccurred events || quit st then pure $ Right st
 
     --otherwise, run the game loop
     else do
-        st' <- withTiming (withRendering op) st events
+        st' <- withTiming (withRendering op) (st { es = events} )
         pure $ Left st' -- return the game state
 
-withTiming :: (MonadIO m) => (World -> [SDL.EventPayload] -> m World) -> World -> [SDL.EventPayload] -> m World
-withTiming op st events = do
+withTiming :: (MonadIO m) => (World -> m World) -> World -> m World
+withTiming op st = do
     -- get start time of tick
     starttick <- SDL.ticks
 
     -- perform game loop
-    st' <- op st events
+    st' <- op st
 
     -- get end time of tick
     endtick <- SDL.ticks
@@ -113,13 +113,13 @@ withTiming op st events = do
         frameTime = 1000 `div` fps st
         wait ms = when (20 > ms && ms > 0) $ SDL.delay ms
 
-withRendering :: (MonadIO m) => (World -> [SDL.EventPayload] -> m World) -> World -> [SDL.EventPayload] -> m World
-withRendering op st events = do
+withRendering :: (MonadIO m) => (World -> m World) -> World -> m World
+withRendering op st = do
     -- clear the screen
     SDL.clear $ r st
 
     -- actually run the game tick
-    st' <- op st events
+    st' <- op st
 
     -- render changes to the screen
     SDL.present $ r st'

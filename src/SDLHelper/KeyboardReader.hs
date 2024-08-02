@@ -2,7 +2,7 @@
 
 module SDLHelper.KeyboardReader where
 
-import SDLHelper.KeyboardReaderExposed
+import SDLHelper.KeyboardReaderExposed (getDefaultInputsExposed, Keybind(..))
 
 import qualified SDL
 
@@ -120,36 +120,47 @@ genericKeypressChecker :: Keyboard
                        -> (SDL.Keycode -> SDL.EventPayload -> Bool)
                        -> Bool
 -- fold over all provided events and see if one of them is the key that has been pressed
-genericKeypressChecker kb keybind es f = foldr (\x l -> f keyraw x || l) False es where
-    -- get a raw keybind (space, left, A, etc) corresponding to a keybind (jump, run, etc)
-    keyraw   = fromJust $ keybind `Map.lookup` kb
+genericKeypressChecker kb keybind es f = case keyraw of
+    Just key -> foldr (\x l -> f key x || l) False es
+    Nothing  -> False
+    where
+
+        -- get a raw keybind (space, left, A, etc) corresponding to a keybind (jump, run, etc)
+        -- returns nothing if the key was not found to have a corresponding keybind
+        -- in this case, the key is ignored
+        keyraw   = keybind `Map.lookup` kb
 
 evaluateKeypress :: SDL.Keycode -> SDL.InputMotion -> Maybe Bool -> SDL.EventPayload -> Bool
-evaluateKeypress targetKeycode targetMotion targetRepeat event = if isNothing keyData' then False else matchingKeycode && matchingMotion && matchingRepeat where
-    compare :: (Eq a) => Maybe a -> a -> Bool
-    compare x y     = case x of
-        Nothing -> True
-        Just x' -> x' == y
+evaluateKeypress targetKeycode targetMotion targetRepeat event =
+    if isNothing keyData'
+        then False
+    else
+        matchingKeycode && matchingMotion && matchingRepeat
+    where
+        compare :: (Eq a) => Maybe a -> a -> Bool
+        compare x y     = case x of
+            Nothing -> True
+            Just x' -> x' == y
 
-    matchingKeycode = targetKeycode == keyKeycode
-    keyKeycode      = SDL.keysymKeycode keyKeysym
-    keyKeysym       = SDL.keyboardEventKeysym keyData
+        matchingKeycode = targetKeycode == keyKeycode
+        keyKeycode      = SDL.keysymKeycode keyKeysym
+        keyKeysym       = SDL.keyboardEventKeysym keyData
 
-    matchingMotion  = targetMotion == keyMotion
-    keyMotion       = SDL.keyboardEventKeyMotion keyData
+        matchingMotion  = targetMotion == keyMotion
+        keyMotion       = SDL.keyboardEventKeyMotion keyData
 
-    matchingRepeat  = compare targetRepeat keyRepeat
-    keyRepeat       = SDL.keyboardEventRepeat keyData
+        matchingRepeat  = compare targetRepeat keyRepeat
+        keyRepeat       = SDL.keyboardEventRepeat keyData
 
-    keyData :: SDL.KeyboardEventData
-    keyData = fromJust $ keyData'
+        keyData :: SDL.KeyboardEventData
+        keyData = fromJust $ keyData'
 
-    keyData' :: Maybe SDL.KeyboardEventData
-    keyData' = convertToData event
+        keyData' :: Maybe SDL.KeyboardEventData
+        keyData' = convertToData event
 
-    convertToData :: SDL.EventPayload -> Maybe SDL.KeyboardEventData
-    convertToData (SDL.KeyboardEvent k) = Just k
-    convertToData _                     = Nothing
+        convertToData :: SDL.EventPayload -> Maybe SDL.KeyboardEventData
+        convertToData (SDL.KeyboardEvent k) = Just k
+        convertToData _                     = Nothing
 
 
 isKeyPressed :: Keyboard -> Keybind -> [SDL.EventPayload] -> Bool
