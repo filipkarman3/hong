@@ -39,7 +39,8 @@ doMain winName (winX, winY) kbPath fInit fLoop fTerminate = withSDL
             es   = [],
             r    = r,
             fps  = 50,
-            quit = False
+            quit = False,
+            logger = []
         }
 
         world <- fInit raw
@@ -144,12 +145,15 @@ withRendering op st = do
 
     -- actually run the game tick
     st' <- op st
+    outputLogs st'
 
     -- render changes to the screen
     SDL.present $ (r $ wr st')
 
     pure st'
 
+outputLogs :: (MonadIO m) => World -> m ()
+outputLogs w = foldr (\s l -> (liftIO . print) s >> l) (pure ()) (logger $ wr w)
 
 -- get all the events that have happened since the last time this function was called
 pollEvents :: (MonadIO m) => m [SDL.EventPayload]

@@ -25,6 +25,10 @@ source-repository head
 
 library
   exposed-modules:
+      Ball
+      Bot
+      Debugger
+      ExtraClasses
       Player
       SDLHelper.Data.Keyboard
       SDLHelper.Data.KeyboardReaderExposed
@@ -50,6 +54,7 @@ library
     , megaparsec
     , mtl
     , parser-combinators
+    , random
     , sdl2
     , sdl2-image
     , tasty
@@ -78,6 +83,7 @@ executable hsgaem-exe
     , megaparsec
     , mtl
     , parser-combinators
+    , random
     , sdl2
     , sdl2-image
     , tasty
@@ -107,6 +113,7 @@ test-suite hsgaem-test
     , megaparsec
     , mtl
     , parser-combinators
+    , random
     , sdl2
     , sdl2-image
     , tasty

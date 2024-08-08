@@ -35,6 +35,7 @@ dependencies:
 - extra
 - tasty-hunit
 - tasty
+- random
 
 ghc-options:
 - -Wall

@@ -4,11 +4,18 @@ import qualified SDL
 
 import qualified SDLHelper.Data.Keyboard as KB
 
-import qualified Player as P
+import qualified Player as P (Player)
+import qualified Ball   as B (Ball)
+import qualified Bot    as Bot (Bot)
+
+import qualified ExtraClasses as EC
 
 data World = World {
     wr     :: WorldRaw,
-    player :: P.Player
+    player :: P.Player,
+    ball   :: B.Ball,
+    score  :: (Int, Int),
+    bot    :: Bot.Bot
 }
 
 data WorldRaw = WorldRaw {
@@ -19,8 +26,14 @@ data WorldRaw = WorldRaw {
     es   :: [SDL.EventPayload],
     r    :: SDL.Renderer,
     fps  :: Int,
-    quit :: Bool
+    quit :: Bool,
+    logger :: [String]
 }
+
+log :: World -> String -> World
+log w s = w { wr = wr' } where
+    wr1 = wr w
+    wr' = wr1 { logger = s : logger wr1 }
 
 getKb   w = kb $ wr w
 getKbs  w = kbs $ wr w
@@ -41,12 +54,12 @@ setFps w x  = w { wr = wr' } where wr' = (wr w) { fps  = x }
 setQuit w x = w { wr = wr' } where wr' = (wr w) { quit = x }
 
 
-changePlayerX :: World -> Int -> World
+changePlayerX :: World -> Float -> World
 changePlayerX w n = w { player = p' } where
     p = player w
-    p' = P.changePlayerX p n
+    p' = EC.changeX p n
 
-changePlayerY :: World -> Int -> World
+changePlayerY :: World -> Float -> World
 changePlayerY w n = w { player = p' } where
     p = player w
-    p' = P.changePlayerY p n
+    p' = EC.changeY p n
