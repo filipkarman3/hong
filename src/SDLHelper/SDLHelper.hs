@@ -5,11 +5,15 @@ module SDLHelper.SDLHelper where
 import qualified SDL
 import qualified SDL.Image
 
-import SDLHelper.Data.WorldExposed (World(wr), WorldRaw(..), getKb)
+import SDLHelper.Data.WorldExposed (World(wr), WorldRaw(..), getKb, logger, clearLog)
 import SDLHelper.Data.Rect
+
+import qualified SDLHelper.Data.MiscData  as MD
 
 import qualified SDLHelper.KeyboardReader as KB
 import qualified SDLHelper.Data.Keyboard  as KB (Keyboard)
+
+import qualified SDL.Font as SDLF
 
 import Control.Monad          (void, when)
 import Control.Monad.Extra    (loopM)
@@ -28,7 +32,13 @@ doMain winName (winX, winY) kbPath fInit fLoop fTerminate = withSDL
     $ \w -> withRenderer w
     $ \r -> KB.withKeyboard kbPath
     $ \kb -> do
+        -- this isn't necessary right now (ie: we don't need to know the kbstate rn)
+        -- BUT the kbstate is a parameter of WorldRaw, so we define it here as a dummy variable
+        -- it is used to initialise WorldRaw and will get updated on each consecutive frame
         kbState <- SDL.getKeyboardState
+
+        -- SDL.Font needs to be initialised
+        SDLF.initialize
 
         -- define a lot of base datatypes here to prevent the library user having to it themselves
         let raw = WorldRaw {
@@ -46,6 +56,9 @@ doMain winName (winX, winY) kbPath fInit fLoop fTerminate = withSDL
         world <- fInit raw
         world' <- loop fLoop world
         fTerminate world'
+
+        -- gotta unload some SDL.Font stuff
+        SDLF.quit
 
         -- gotta return the keyboard layout
         pure $ getUpdatedKb world'
@@ -144,16 +157,17 @@ withRendering op st = do
     SDL.clear $ (r $ wr st)
 
     -- actually run the game tick
-    st' <- op st
-    outputLogs st'
+    st' <- op st >>= outputLogs
 
     -- render changes to the screen
     SDL.present $ (r $ wr st')
 
     pure st'
 
-outputLogs :: (MonadIO m) => World -> m ()
-outputLogs w = foldr (\s l -> (liftIO . print) s >> l) (pure ()) (logger $ wr w)
+outputLogs :: (MonadIO m) => World -> m World
+outputLogs w = do
+    foldr (\s l -> (liftIO . print) s >> l) (pure ()) (logger $ wr w)
+    pure $ clearLog w
 
 -- get all the events that have happened since the last time this function was called
 pollEvents :: (MonadIO m) => m [SDL.EventPayload]
@@ -168,3 +182,16 @@ loadTexture r p = do
   t <- SDL.Image.loadTexture r p
   i <- SDL.queryTexture t
   pure (t, i)
+
+-- given a surface, it creates a texture and frees space used up by the surface
+surfaceToTexture :: (MonadIO m) => SDL.Renderer -> SDL.Surface -> m MD.Sprite
+surfaceToTexture r s = do
+    -- create a texture from the surface
+    t <- SDL.createTextureFromSurface r s
+    i <- SDL.queryTexture t
+
+    -- free up memory taken up by surface
+    SDL.freeSurface s
+
+    -- return the texture
+    pure (t, i)

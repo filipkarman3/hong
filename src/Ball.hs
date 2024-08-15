@@ -5,12 +5,13 @@ module Ball where
 import qualified SDL
 
 import SDLHelper.Data.Rect (Rect)
-import qualified ExtraClasses as EC
+import qualified SDLHelper.Data.MiscData as MD
 
 data Ball = Ball {
+    initialSpeed :: Float,
     speed :: Float,
     rect  :: Rect,
-    sprite :: (SDL.Texture, SDL.TextureInfo),
+    sprite :: MD.Sprite,
     speedIncrement :: Float,
     timeUntilIncrementMax :: Int,
     timeUntilIncrement :: Int,
@@ -44,9 +45,7 @@ angleReflectionRight 5 = 3
 angleReflectionRight 7 = 1
 angleReflectionRight x = x
 
-instance EC.RectContainer Ball where
+instance MD.Drawable Ball where
     getRect = rect
     setRect b r = b { rect = r }
-
-instance EC.Entity Ball where
     getSprite = sprite

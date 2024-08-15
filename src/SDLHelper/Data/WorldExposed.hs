@@ -1,21 +1,28 @@
 module SDLHelper.Data.WorldExposed where
 
 import qualified SDL
+import qualified SDL.Font as SDLF
 
 import qualified SDLHelper.Data.Keyboard as KB
+import qualified SDLHelper.Data.MiscData as MD
 
 import qualified Player as P (Player)
 import qualified Ball   as B (Ball)
 import qualified Bot    as Bot (Bot)
 
-import qualified ExtraClasses as EC
+import qualified Data.Map as Map
+
+data Scene = Menu | Game deriving (Show, Eq)
 
 data World = World {
     wr     :: WorldRaw,
     player :: P.Player,
     ball   :: B.Ball,
     score  :: (Int, Int),
-    bot    :: Bot.Bot
+    bot    :: Bot.Bot,
+    text   :: Map.Map String MD.Drawthing,
+    scene  :: Scene,
+    played :: Bool
 }
 
 data WorldRaw = WorldRaw {
@@ -35,6 +42,11 @@ log w s = w { wr = wr' } where
     wr1 = wr w
     wr' = wr1 { logger = s : logger wr1 }
 
+clearLog :: World -> World
+clearLog w = w { wr = wr' } where
+    wr1 = wr w
+    wr' = wr1 { logger = [] }
+
 getKb   w = kb $ wr w
 getKbs  w = kbs $ wr w
 getKbps w = kbps $ wr w
@@ -53,13 +65,12 @@ setR w x    = w { wr = wr' } where wr' = (wr w) { r    = x }
 setFps w x  = w { wr = wr' } where wr' = (wr w) { fps  = x }
 setQuit w x = w { wr = wr' } where wr' = (wr w) { quit = x }
 
-
 changePlayerX :: World -> Float -> World
 changePlayerX w n = w { player = p' } where
     p = player w
-    p' = EC.changeX p n
+    p' = MD.changeX p n
 
 changePlayerY :: World -> Float -> World
 changePlayerY w n = w { player = p' } where
     p = player w
-    p' = EC.changeY p n
+    p' = MD.changeY p n

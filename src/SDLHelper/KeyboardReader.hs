@@ -3,7 +3,7 @@ module SDLHelper.KeyboardReader where
 import qualified SDL
 
 import qualified SDLHelper.Data.KeyboardReaderExposed as KR (getDefaultInputsExposed, Keybind(..))
-import qualified SDLHelper.Data.WorldExposed          as W  (World, getKb, getKbs, getKbps)
+import qualified SDLHelper.Data.WorldExposed          as W  (World, getKb, getKbs, getKbps, setKb)
 import           SDLHelper.Data.Keyboard                    (Keyboard)
 
 import Control.Monad.IO.Class (MonadIO)
@@ -114,3 +114,8 @@ isKeyHeld w keybind = genericKeypressChecker w keybind f where
 isKeyDown :: (MonadIO m) => W.World -> KR.Keybind -> m Bool
 isKeyDown w keybind = genericKeypressChecker w keybind f where
     f x y = x
+
+modifyKeyBind :: W.World -> KR.Keybind -> SDL.Scancode -> W.World
+modifyKeyBind w k c = W.setKb w kb' where
+    kb' = Map.update (\_ -> Just c) k kb
+    kb  = W.getKb w

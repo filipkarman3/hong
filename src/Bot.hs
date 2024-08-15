@@ -3,18 +3,16 @@ module Bot where
 import qualified SDL
 
 import SDLHelper.Data.Rect (Rect)
-import qualified ExtraClasses as EC
+import qualified SDLHelper.Data.MiscData as MD
 
 data Bot = Bot {
     speed :: Float,
     rect  :: Rect,
-    sprite :: (SDL.Texture, SDL.TextureInfo),
+    sprite :: MD.Sprite,
     destination :: Int
 }
 
-instance EC.RectContainer Bot where
+instance MD.Drawable Bot where
     getRect = rect
     setRect b r = b { rect = r }
-
-instance EC.Entity Bot where
     getSprite = sprite

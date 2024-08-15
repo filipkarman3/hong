@@ -7,9 +7,9 @@ import Prelude hiding (Left, Right)
 import qualified Player       as P
 import qualified Ball         as B
 import qualified Bot          as Bot
-import qualified ExtraClasses as EC
 
 import qualified SDL
+import qualified SDL.Font as SDLF
 
 import qualified SDLHelper.SDLHelper as H
 
@@ -17,11 +17,16 @@ import qualified SDLHelper.Data.Rect                  as R
 import qualified SDLHelper.Data.Keyboard              as KB (Keyboard)
 import qualified SDLHelper.Data.KeyboardReaderExposed as KB (Keybind(..))
 import qualified SDLHelper.Data.WorldExposed          as W
+import qualified SDLHelper.Data.MiscData              as MD
+import qualified SDLHelper.TextRenderer               as TR
 
 import qualified SDLHelper.KeyboardReader as KB
 import SDLHelper.Monads
 
+import qualified Data.Map as Map
+
 import Control.Monad.IO.Class (MonadIO, liftIO)
+import Control.Monad (when)
 
 import Foreign.C.Types (CInt)
 import Data.Function ((&))
@@ -47,12 +52,11 @@ getOriginRect t = R.Rect 0 0 w h where
     w = fromIntegral $ SDL.textureWidth  $ snd t
     h = fromIntegral $ SDL.textureHeight $ snd t
 
-toInt :: Float -> Int
-toInt = round
+white = SDL.V4 255 255 255 0
 
 -------------- CALL TO SDLHELPER --------------
 main :: IO ()
-main = H.doMain "hsgaem" (screenWidth, screenHeight) "assets/data/layout.kb" Main.init loop terminate
+main = H.doMain "Hong" (screenWidth, screenHeight) "assets/data/layout.kb" Main.init loop terminate
 
 -------------- INITIALISATION LOGIC --------------
 init :: W.WorldRaw -> IO W.World
@@ -63,30 +67,42 @@ init raw = do
     -- required for ball generation
     randNum <- randomRIO (0, 3) :: IO Int
     ballImg <- H.loadTexture (W.r raw) "assets/ball.png"
-
+    
+    -- creating the player
     let p = initPlayer playerImg
+    
+    -- generate images of text
+    text <- initText (W.r raw)
 
+    -- creating the world
     let world = W.World {
         W.wr     = raw,
         W.player = p,
         W.ball   = initBall ballImg randNum (W.fps raw),
         W.score  = (0, 0),
-        W.bot    = initBot p
+        W.bot    = initBot p,
+        W.text   = text,
+        W.scene  = W.Menu,
+        W.played = False
     }
 
     -- calculates where the bot will go to intercept the incoming ball
     pure $ calculateNewBotDestination world
 
-initPlayer :: (SDL.Texture, SDL.TextureInfo) -> P.Player
+initPlayer :: MD.Sprite -> P.Player
 initPlayer t = P.Player {
         P.speed = 3,
         P.rect  = R.centerRectVertical (getOriginRect t) screenRect,
         P.sprite = t
     }
 
-initBall :: (SDL.Texture, SDL.TextureInfo) -> Int -> Int -> B.Ball
+resetPlayer :: P.Player -> P.Player
+resetPlayer p = p { P.rect = R.centerRectVertical (getOriginRect $ P.sprite p) screenRect }
+
+initBall :: MD.Sprite -> Int -> Int -> B.Ball
 initBall t rn fps = B.Ball {
-        B.speed = 3,
+        B.initialSpeed = initS,
+        B.speed = initS,
         B.rect  = R.centerRect (getOriginRect t) screenRect,
         B.sprite = t,
         B.speedIncrement = 1,
@@ -95,15 +111,51 @@ initBall t rn fps = B.Ball {
         B.angle = rn * 2 + 1
     } where
         incT = 5 * fps
+        initS = 3
+
+resetBall :: B.Ball -> B.Ball
+resetBall b = b {
+        B.speed = B.initialSpeed b,
+        B.rect  = R.centerRect (B.rect b) screenRect
+    }
 
 initBot :: P.Player -> Bot.Bot
 initBot p = Bot.Bot {
         Bot.speed = P.speed p,
         Bot.rect = r',
-        Bot.sprite = P.sprite p
+        Bot.sprite = P.sprite p,
+        Bot.destination = -1
     } where
         r  = P.rect p
         r' = r { R.rectX = int2Float screenWidth - R.rectW r }
+
+resetBot :: Bot.Bot -> Bot.Bot
+resetBot b = b
+
+initText :: SDL.Renderer -> IO (Map.Map String MD.Drawthing)
+initText r = do
+    m <- TR.loadSolidText r "assets/data/font.otf" 30 white [
+        ("hong", "Hong"),
+        ("howToStart", "Hit Right to start!"),
+        ("playAgain", "Game End! Play again?")
+        ]
+    pure $ Map.fromList [textTitle m, textStart m, textAgain m]
+    where
+
+        textTitle = f "hong" 200
+        textStart = f "howToStart" 240
+        textAgain = f "playAgain" 306
+
+        f :: String -> Float -> Map.Map String MD.Sprite -> (String, MD.Drawthing)
+        f k v m = (k, MD.Drawthing r t) where
+            t :: MD.Sprite
+            t = m Map.! k
+
+            r :: R.Rect
+            r = R.centerRectHorizontal r' screenRect
+
+            r' :: R.Rect
+            r' = R.Rect 0 v (fromIntegral $ SDL.textureWidth $ snd t) (fromIntegral $ SDL.textureHeight $ snd t) 
 
 -------------- GAME LOOP --------------
 loop :: W.World -> IO W.World
@@ -119,7 +171,9 @@ loop w = do
 -- update the world
 updateWorld :: W.World -> IO W.World
 updateWorld w = do
-    w' <- registerQuit w >>= movePlayer >>= updateBall >>= updateBot
+    w' <- if W.scene w == W.Menu
+        then registerStartGame w
+        else registerQuit w >>= movePlayer >>= updateBall >>= updateBot
     pure w'
 
 -- checks if the player is trying to exit the game, and flips the quit flag if so
@@ -132,11 +186,15 @@ renderWorld w = do
     renderEntity w (W.player w)
     renderEntity w (W.ball w)
     renderEntity w (W.bot w)
-
+    when (W.scene w == W.Menu && not (W.played w))
+        (renderEntity w (W.text w Map.! "hong") >> renderEntity w (W.text w Map.! "howToStart"))
+    when (W.scene w == W.Menu && W.played w)
+        (renderEntity w (W.text w Map.! "playAgain"))
+        
 -- render stuff onto the screen
 renderSimple :: W.World
-             -> (SDL.Texture, SDL.TextureInfo)
-             -> (SDL.V2 Int)
+             -> MD.Sprite
+             -> SDL.V2 Int
              -> IO ()
 renderSimple w (t, i) (SDL.V2 x y) = SDL.copy (W.getR w) t Nothing (Just rect) where
     rect   = R.toSDLRect (toCInt x) (toCInt y) width height
@@ -147,11 +205,22 @@ renderSimple w (t, i) (SDL.V2 x y) = SDL.copy (W.getR w) t Nothing (Just rect) w
     toCInt = fromIntegral
 
 -- abstracts renderSimple for instances of Entity
-renderEntity :: (EC.Entity e)
+renderEntity :: (MD.Drawable e)
              => W.World
              -> e
              -> IO ()
-renderEntity w e = renderSimple w (EC.getSprite e) (EC.getPos e)
+renderEntity w e = renderSimple w (MD.getSprite e) (MD.getPos e)
+
+-------------- STARTING GAME --------------
+registerStartGame :: W.World -> IO W.World
+registerStartGame w = ifM (KB.isKeyDown w KB.Right)
+        {-then-} (calculateNewBotDestination $ w {
+                W.scene  = W.Game,
+                W.player = resetPlayer $ W.player w,
+                W.ball   = resetBall   $ W.ball   w,
+                W.bot    = resetBot    $ W.bot    w
+            })
+        {-else-} w
 
 -------------- PLAYER MOVEMENT --------------
 -- handles player movement
@@ -200,13 +269,13 @@ constrain min max x
 
 -------------- BALL COMPUTATION --------------
 updateBall :: W.World -> IO W.World
-updateBall w = pure $ moveBall w & handleBallCollision & increaseBallSpeed
+updateBall w = pure $ moveBall w & handleBallCollision & increaseBallSpeed & checkForWin
 
 moveBall :: W.World -> W.World
 moveBall w = w { W.ball = b' } where
     b  = W.ball w
     a  = (int2Float $ B.angle b) * pi/4
-    b' = EC.changeY (EC.changeX b xSpeed) ySpeed
+    b' = MD.changeY (MD.changeX b xSpeed) ySpeed
     xSpeed = sin a * (-(B.speed b))
     ySpeed = cos a * B.speed b
 
@@ -264,6 +333,14 @@ increaseBallSpeed w = w { W.ball = b' } where
             }
     b = W.ball w
 
+checkForWin :: W.World -> W.World
+checkForWin w = if ballOutsideBounds b
+    then w { W.played = True, W.scene = W.Menu }
+    else w where
+        b = W.ball w
+        r = B.rect b
+        ballOutsideBounds b = R.rectX r + R.rectW r < 0 || int2Float screenWidth < R.rectX r
+
 
 -------------- BOT HANDLING --------------
 updateBot :: W.World -> IO W.World
@@ -277,19 +354,19 @@ updateBot w = pure $ w { W.bot = b' } where
 
 botReachedDestination :: Bot.Bot -> Bool
 botReachedDestination b = within currentPos minY maxY where
-    currentPos = toInt $ R.rectY $ Bot.rect b
+    currentPos = MD.toInt $ R.rectY $ Bot.rect b
     minY       = d - s
     maxY       = d + s
     d          = Bot.destination b
-    s          = toInt $ Bot.speed b
+    s          = MD.toInt $ Bot.speed b
 
 within :: (Ord a) => a -> a -> a -> Bool
 within x min max = min <= x && x <= max
 
 botMoveToDestination :: Bot.Bot -> Bot.Bot
 botMoveToDestination b
-    | d < R.rectY r = EC.changeY b (-s)
-    | otherwise     = EC.changeY b s
+    | d < R.rectY r = MD.changeY b (-s)
+    | otherwise     = MD.changeY b s
     where
         r = Bot.rect b
         s = Bot.speed b
@@ -306,8 +383,8 @@ calculateNewBotDestination w = w { W.bot = b' } where
     -- calculate the new destination
     -- (ie: where ball will hit the right side of the screen next)
     d' = nextColLoc (ballX, ballY) (B.angle ball)
-    ballX = toInt $ R.rectX ballR
-    ballY = toInt $ R.rectY ballR
+    ballX = MD.toInt $ R.rectX ballR
+    ballY = MD.toInt $ R.rectY ballR
 
     -- some more data we'll need to use
     ballR = B.rect ball
@@ -332,10 +409,10 @@ calculateNewBotDestination w = w { W.bot = b' } where
             -- I've been saying "right side of the screen" a lot
             -- but I actually mean the left side of the bot's paddle
             -- which is what the ball will (hopefully) collide with
-            leftBound  = toInt $ R.rectW $ P.rect $ W.player w
-            rightBound = screenWidth - toInt (R.rectW $ Bot.rect b) - toInt (R.rectW $ B.rect $ W.ball w)
+            leftBound  = MD.toInt $ R.rectW $ P.rect $ W.player w
+            rightBound = screenWidth - MD.toInt (R.rectW $ Bot.rect b) - MD.toInt (R.rectW $ B.rect $ W.ball w)
             upBound    = 0
-            downBound  = screenHeight - toInt (R.rectH $ B.rect $ W.ball w)
+            downBound  = screenHeight - MD.toInt (R.rectH $ B.rect $ W.ball w)
             
             -- assuming the ball can't collide with the top and bottom:
             -- xColDist is what the ball will first collide with
@@ -378,7 +455,7 @@ calculateNewBotDestination w = w { W.bot = b' } where
             -- adjusts the destination that the bot goes to
             -- bot will attempt to move to a position that is
             -- (position where ball will hit) - (height of bot / 2)
-            optimalPos = colLocY - toInt ((R.rectH $ Bot.rect b)/2)
+            optimalPos = colLocY - MD.toInt ((R.rectH $ Bot.rect b)/2)
 
     p = W.player w
     
@@ -393,3 +470,4 @@ terminate :: (MonadIO m) => W.World -> m ()
 terminate w = do
     SDL.destroyTexture (fst $ P.sprite $ W.player w)
     SDL.destroyTexture (fst $ B.sprite $ W.ball   w)
+    foldr (\x l -> l >> SDL.destroyTexture (fst $ MD.sprite x)) (pure ()) $ W.text w

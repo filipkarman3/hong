@@ -1,10 +1,12 @@
-module ExtraClasses where
+module SDLHelper.Data.MiscData where
 
 import qualified SDL
 
 import SDLHelper.Data.Rect (Rect, rectX, rectY)
 
-class RectContainer a where
+type Sprite = (SDL.Texture, SDL.TextureInfo)
+
+class Drawable a where
     getRect :: a -> Rect
     setRect :: a -> Rect -> a
 
@@ -24,8 +26,20 @@ class RectContainer a where
         r  = getRect a
         r' = r { rectY = rectY r + d }
 
-class (RectContainer a) => Entity a where
     getSprite :: a -> (SDL.Texture, SDL.TextureInfo)
 
 toInt :: Float -> Int
 toInt = round
+
+data Drawthing = Drawthing {
+    rect :: Rect,
+    sprite :: Sprite
+}
+
+instance Show Drawthing where
+    show d = "Drawthing with rect: " ++ show (rect d)
+
+instance Drawable Drawthing where
+    getRect = rect
+    setRect b r = b { rect = r }
+    getSprite = sprite

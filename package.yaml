@@ -36,6 +36,8 @@ dependencies:
 - tasty-hunit
 - tasty
 - random
+# - sdl2-ttf >= 2.0.12
+- sdl2-ttf
 
 ghc-options:
 - -Wall
