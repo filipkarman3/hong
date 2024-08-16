@@ -58,6 +58,7 @@ library
     , random
     , sdl2
     , sdl2-image
+    , sdl2-mixer
     , sdl2-ttf
     , tasty
     , tasty-hunit
@@ -88,6 +89,7 @@ executable hsgaem-exe
     , random
     , sdl2
     , sdl2-image
+    , sdl2-mixer
     , sdl2-ttf
     , tasty
     , tasty-hunit
@@ -119,6 +121,7 @@ test-suite hsgaem-test
     , random
     , sdl2
     , sdl2-image
+    , sdl2-mixer
     , sdl2-ttf
     , tasty
     , tasty-hunit

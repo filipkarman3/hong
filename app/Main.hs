@@ -9,7 +9,8 @@ import qualified Ball         as B
 import qualified Bot          as Bot
 
 import qualified SDL
-import qualified SDL.Font as SDLF
+import qualified SDL.Font  as SDLF
+import qualified SDL.Mixer as SDLM
 
 import qualified SDLHelper.SDLHelper as H
 
@@ -54,6 +55,9 @@ getOriginRect t = R.Rect 0 0 w h where
 
 white = SDL.V4 255 255 255 0
 
+updateIf :: Bool -> (a -> a) -> a -> a
+updateIf b f a = if b then f a else a
+
 -------------- CALL TO SDLHELPER --------------
 main :: IO ()
 main = H.doMain "Hong" (screenWidth, screenHeight) "assets/data/layout.kb" Main.init loop terminate
@@ -74,6 +78,10 @@ init raw = do
     -- generate images of text
     text <- initText (W.r raw)
 
+    bounceWav <- SDLM.load "assets/bounce.wav"
+    loseWav   <- SDLM.load "assets/lose.wav"
+    startWav  <- SDLM.load "assets/start.wav"
+
     -- creating the world
     let world = W.World {
         W.wr     = raw,
@@ -83,7 +91,9 @@ init raw = do
         W.bot    = initBot p,
         W.text   = text,
         W.scene  = W.Menu,
-        W.played = False
+        W.played = False,
+        W.sounds = [bounceWav, loseWav, startWav],
+        W.soundQ = []
     }
 
     -- calculates where the bot will go to intercept the incoming ball
@@ -161,7 +171,7 @@ initText r = do
 loop :: W.World -> IO W.World
 loop w = do
     -- update the world
-    w' <- updateWorld w
+    w' <- updateWorld w >>= W.playSounds
 
     -- perform rendering
     renderWorld w'
@@ -171,10 +181,11 @@ loop w = do
 -- update the world
 updateWorld :: W.World -> IO W.World
 updateWorld w = do
-    w' <- if W.scene w == W.Menu
-        then registerStartGame w
-        else registerQuit w >>= movePlayer >>= updateBall >>= updateBot
-    pure w'
+    w' <- registerQuit w
+    w'' <- if W.scene w' == W.Menu
+        then registerStartGame w'
+        else movePlayer w' >>= updateBall >>= updateBot
+    pure w''
 
 -- checks if the player is trying to exit the game, and flips the quit flag if so
 registerQuit :: W.World -> IO W.World
@@ -214,12 +225,13 @@ renderEntity w e = renderSimple w (MD.getSprite e) (MD.getPos e)
 -------------- STARTING GAME --------------
 registerStartGame :: W.World -> IO W.World
 registerStartGame w = ifM (KB.isKeyDown w KB.Right)
-        {-then-} (calculateNewBotDestination $ w {
+        {-then-} (w {
                 W.scene  = W.Game,
                 W.player = resetPlayer $ W.player w,
                 W.ball   = resetBall   $ W.ball   w,
                 W.bot    = resetBot    $ W.bot    w
-            })
+            } & (\w -> W.addSound w (W.sounds w !! 2))
+              & calculateNewBotDestination )
         {-else-} w
 
 -------------- PLAYER MOVEMENT --------------
@@ -274,7 +286,7 @@ updateBall w = pure $ moveBall w & handleBallCollision & increaseBallSpeed & che
 moveBall :: W.World -> W.World
 moveBall w = w { W.ball = b' } where
     b  = W.ball w
-    a  = (int2Float $ B.angle b) * pi/4
+    a  = int2Float (B.angle b) * pi/4
     b' = MD.changeY (MD.changeX b xSpeed) ySpeed
     xSpeed = sin a * (-(B.speed b))
     ySpeed = cos a * B.speed b
@@ -282,7 +294,9 @@ moveBall w = w { W.ball = b' } where
 -- reflect the ball if it hits the side of the screen or paddles
 handleBallCollision :: W.World -> W.World
 -- check the definition of a'' for an explanation of this if statement
-handleBallCollision w = if a' == a'' then w' else calculateNewBotDestination w' where
+handleBallCollision w = if a' == a''
+    then w'
+    else calculateNewBotDestination w' where
     -- get some values that will be helpful
     b  = W.ball w
     r  = B.rect b
@@ -302,7 +316,12 @@ handleBallCollision w = if a' == a'' then w' else calculateNewBotDestination w' 
 
     -- this saves the new angle before putting the updated ball back in the world record
     b' = B.setAngle b a''
-    w' = w { W.ball = b' }
+
+    -- also play a sound if the ball bounced
+    w' = updateIf (a /= a' || a /= a'')
+        {- then -} (\x -> W.addSound x (head $ W.sounds x))
+        {- else -} w { W.ball = b' }
+    
 
     -- four functions causing a reflection to happen if a condition is met
     reflectOffPlayer  r a = genericReflection ((P.rect $ W.player w) `R.overlaps` r)            B.angleReflectionLeft   a
@@ -335,7 +354,7 @@ increaseBallSpeed w = w { W.ball = b' } where
 
 checkForWin :: W.World -> W.World
 checkForWin w = if ballOutsideBounds b
-    then w { W.played = True, W.scene = W.Menu }
+    then w { W.played = True, W.scene = W.Menu } & (\w -> W.addSound w (W.sounds w !! 1))
     else w where
         b = W.ball w
         r = B.rect b
@@ -471,3 +490,4 @@ terminate w = do
     SDL.destroyTexture (fst $ P.sprite $ W.player w)
     SDL.destroyTexture (fst $ B.sprite $ W.ball   w)
     foldr (\x l -> l >> SDL.destroyTexture (fst $ MD.sprite x)) (pure ()) $ W.text w
+    foldr (\x l -> l >> SDLM.free x) (pure ()) $ W.sounds w

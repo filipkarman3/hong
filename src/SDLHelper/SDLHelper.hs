@@ -13,7 +13,8 @@ import qualified SDLHelper.Data.MiscData  as MD
 import qualified SDLHelper.KeyboardReader as KB
 import qualified SDLHelper.Data.Keyboard  as KB (Keyboard)
 
-import qualified SDL.Font as SDLF
+import qualified SDL.Font  as SDLF
+import qualified SDL.Mixer as SDLM
 
 import Control.Monad          (void, when)
 import Control.Monad.Extra    (loopM)
@@ -28,6 +29,7 @@ doMain :: Text
        -> (World -> IO ())
        -> IO ()
 doMain winName (winX, winY) kbPath fInit fLoop fTerminate = withSDL
+    $ SDLM.withAudio SDLM.defaultAudio 1024
     $ withWindow winName (winX, winY)
     $ \w -> withRenderer w
     $ \r -> KB.withKeyboard kbPath

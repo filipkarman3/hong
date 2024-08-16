@@ -2,6 +2,7 @@ module SDLHelper.Data.WorldExposed where
 
 import qualified SDL
 import qualified SDL.Font as SDLF
+import qualified SDL.Mixer as SDLM
 
 import qualified SDLHelper.Data.Keyboard as KB
 import qualified SDLHelper.Data.MiscData as MD
@@ -11,6 +12,8 @@ import qualified Ball   as B (Ball)
 import qualified Bot    as Bot (Bot)
 
 import qualified Data.Map as Map
+
+import Control.Monad.IO.Class (MonadIO)
 
 data Scene = Menu | Game deriving (Show, Eq)
 
@@ -22,8 +25,17 @@ data World = World {
     bot    :: Bot.Bot,
     text   :: Map.Map String MD.Drawthing,
     scene  :: Scene,
-    played :: Bool
+    played :: Bool,
+    sounds :: [SDLM.Chunk],
+    soundQ :: [SDLM.Chunk]
 }
+
+addSound :: World -> SDLM.Chunk -> World
+addSound w s = w { soundQ = s : soundQ w }
+
+playSounds :: (MonadIO m) => World -> m World
+playSounds w = foldr (\x l -> l >> SDLM.play x) (pure ()) (soundQ w)
+    >> pure (w { soundQ = [] })
 
 data WorldRaw = WorldRaw {
     kb   :: KB.Keyboard,
