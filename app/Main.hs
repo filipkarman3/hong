@@ -144,7 +144,7 @@ resetBot b = b
 
 initText :: SDL.Renderer -> IO (Map.Map String MD.Drawthing)
 initText r = do
-    m <- TR.loadSolidText r "assets/data/font.otf" 30 white [
+    m <- TR.loadSolidText r "assets/data/font.ttf" 30 white [
         ("hong", "Hong"),
         ("howToStart", "Hit Right to start!"),
         ("playAgain", "Game End! Play again?")

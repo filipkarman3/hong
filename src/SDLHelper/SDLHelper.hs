@@ -5,7 +5,7 @@ module SDLHelper.SDLHelper where
 import qualified SDL
 import qualified SDL.Image
 
-import SDLHelper.Data.WorldExposed (World(wr), WorldRaw(..), getKb, logger, clearLog)
+import qualified SDLHelper.Data.WorldExposed as W (World(wr), WorldRaw(..), getKb, logger, clearLog)
 import SDLHelper.Data.Rect
 
 import qualified SDLHelper.Data.MiscData  as MD
@@ -24,9 +24,9 @@ import Data.Text              (Text)
 doMain :: Text
        -> (Int, Int)
        -> FilePath
-       -> (WorldRaw -> IO World)
-       -> (World -> IO World)
-       -> (World -> IO ())
+       -> (W.WorldRaw -> IO W.World)
+       -> (W.World -> IO W.World)
+       -> (W.World -> IO ())
        -> IO ()
 doMain winName (winX, winY) kbPath fInit fLoop fTerminate = withSDL
     $ SDLM.withAudio SDLM.defaultAudio 1024
@@ -43,16 +43,16 @@ doMain winName (winX, winY) kbPath fInit fLoop fTerminate = withSDL
         SDLF.initialize
 
         -- define a lot of base datatypes here to prevent the library user having to it themselves
-        let raw = WorldRaw {
-            kb   = kb,
-            kbs  = kbState,
-            kbps = kbState,
-            w    = w,
-            es   = [],
-            r    = r,
-            fps  = 50,
-            quit = False,
-            logger = []
+        let raw = W.WorldRaw {
+            W.kb   = kb,
+            W.kbs  = kbState,
+            W.kbps = kbState,
+            W.w    = w,
+            W.es   = [],
+            W.r    = r,
+            W.fps  = 50,
+            W.quit = False,
+            W.logger = []
         }
 
         world <- fInit raw
@@ -67,8 +67,8 @@ doMain winName (winX, winY) kbPath fInit fLoop fTerminate = withSDL
     
     where
 
-        getUpdatedKb :: World -> KB.Keyboard
-        getUpdatedKb world = getKb world
+        getUpdatedKb :: W.World -> KB.Keyboard
+        getUpdatedKb world = W.getKb world
 
 withSDL :: (MonadIO m) => m a -> m ()
 withSDL op = do
@@ -103,37 +103,37 @@ rendererConfig = SDL.RendererConfig {
 
 -- iteratively poll for SDL events, perform some operation, quit upon a QuitEvent
 loop :: (MonadIO m)
-     => (World -> m World)
-     -> World
-     -> m World
+     => (W.World -> m W.World)
+     -> W.World
+     -> m W.World
 loop op st = loopM (withEventHandling op) st
 
 withEventHandling :: (MonadIO m)
-                  => (World -> m World)
-                  -> World
-                  -> m (Either World World)
+                  => (W.World -> m W.World)
+                  -> W.World
+                  -> m (Either W.World W.World)
 withEventHandling op st = do
     -- get list of SDL events like keypresses
     events <- pollEvents
     state  <- SDL.getKeyboardState
     
-    let raw = wr st
+    let raw = W.wr st
 
     -- quit the game if a quit event occurred
-    if quitEventOccurred events || quit raw then pure $ Right st
+    if quitEventOccurred events || W.quit raw then pure $ Right st
 
     --otherwise, run the game loop
     else do
         -- update the necessary values, like keypresses done this turn
-        let raw' = raw { es = events, kbps = (kbs raw), kbs = state }
+        let raw' = raw { W.es = events, W.kbps = W.kbs raw, W.kbs = state }
 
         -- then actuall run the frame
-        st' <- withTiming (withRendering op) (st { wr = raw' })
+        st' <- withTiming (withRendering op) (st { W.wr = raw' })
         
         -- return the game state
         pure $ Left st'
 
-withTiming :: (MonadIO m) => (World -> m World) -> World -> m World
+withTiming :: (MonadIO m) => (W.World -> m W.World) -> W.World -> m W.World
 withTiming op st = do
     -- get start time of tick
     starttick <- SDL.ticks
@@ -150,26 +150,26 @@ withTiming op st = do
     pure st'
     where
         frameTime :: Int
-        frameTime = 1000 `div` (fps $ wr st)
+        frameTime = 1000 `div` W.fps (W.wr st)
         wait ms = when (20 > ms && ms > 0) $ SDL.delay ms
 
-withRendering :: (MonadIO m) => (World -> m World) -> World -> m World
+withRendering :: (MonadIO m) => (W.World -> m W.World) -> W.World -> m W.World
 withRendering op st = do
     -- clear the screen
-    SDL.clear $ (r $ wr st)
+    SDL.clear $ W.r $ W.wr st
 
     -- actually run the game tick
     st' <- op st >>= outputLogs
 
     -- render changes to the screen
-    SDL.present $ (r $ wr st')
+    SDL.present $ W.r $ W.wr st'
 
     pure st'
 
-outputLogs :: (MonadIO m) => World -> m World
+outputLogs :: (MonadIO m) => W.World -> m W.World
 outputLogs w = do
-    foldr (\s l -> (liftIO . print) s >> l) (pure ()) (logger $ wr w)
-    pure $ clearLog w
+    foldr (\s l -> (liftIO . print) s >> l) (pure ()) (W.logger $ W.wr w)
+    pure $ W.clearLog w
 
 -- get all the events that have happened since the last time this function was called
 pollEvents :: (MonadIO m) => m [SDL.EventPayload]
